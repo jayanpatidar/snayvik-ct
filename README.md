@@ -73,6 +73,17 @@ curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integra
   -d '{"active":true,"settings":{"org":"snayvik"},"secret":"ghp_xxx"}'
 curl -u admin:'AdminPass@123' -X POST http://localhost:8080/api/kpi/admin/integrations/connections/GITHUB/test
 ```
+- Integration SSO connect flow (GitHub/Monday/Slack):
+```bash
+# Step 1: fetch provider authorize URL (requires authenticated admin session)
+curl -u admin:'AdminPass@123' http://localhost:8080/api/kpi/admin/integrations/oauth/GITHUB/authorize-url
+
+# Step 2: open returned authorizationUrl in browser and finish provider login.
+# Provider redirects to:
+#   /api/kpi/admin/integrations/oauth/{SYSTEM}/callback
+# then app redirects back to:
+#   /admin/integrations?oauthStatus=...
+```
 - Manage repository mappings used by sync:
 ```bash
 curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integrations/repositories \
@@ -91,9 +102,28 @@ curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integra
 - `/api/**` requires authentication.
 - `/api/kpi/admin/**` requires `ADMIN` role.
 - `/webhooks/**` remains public for GitHub/monday callbacks.
+- Integration SSO callback routes are protected by admin session auth and are only used after the authorize step.
 - API access example (basic auth):
 ```bash
 curl -u admin:'AdminPass@123' http://localhost:8080/api/kpi/system/ping
+```
+
+## Integration SSO configuration
+Enable provider OAuth only for integrations you want to link through SSO:
+```bash
+APP_INTEGRATIONS_OAUTH_GITHUB_ENABLED=true
+APP_INTEGRATIONS_OAUTH_GITHUB_CLIENT_ID=...
+APP_INTEGRATIONS_OAUTH_GITHUB_CLIENT_SECRET=...
+# optional override if app is behind a reverse proxy
+APP_INTEGRATIONS_OAUTH_GITHUB_REDIRECT_URI=https://your-host/api/kpi/admin/integrations/oauth/GITHUB/callback
+
+APP_INTEGRATIONS_OAUTH_MONDAY_ENABLED=true
+APP_INTEGRATIONS_OAUTH_MONDAY_CLIENT_ID=...
+APP_INTEGRATIONS_OAUTH_MONDAY_CLIENT_SECRET=...
+
+APP_INTEGRATIONS_OAUTH_SLACK_ENABLED=true
+APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_ID=...
+APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_SECRET=...
 ```
 
 ## Docker compose

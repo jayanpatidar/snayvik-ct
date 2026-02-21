@@ -28,6 +28,31 @@ app:
       webhook-secret: ${GITHUB_WEBHOOK_SECRET:change-me}
     monday:
       webhook-token: ${MONDAY_WEBHOOK_TOKEN:change-me}
+    oauth:
+      github:
+        enabled: ${APP_INTEGRATIONS_OAUTH_GITHUB_ENABLED:false}
+        client-id: ${APP_INTEGRATIONS_OAUTH_GITHUB_CLIENT_ID:}
+        client-secret: ${APP_INTEGRATIONS_OAUTH_GITHUB_CLIENT_SECRET:}
+        authorization-uri: ${APP_INTEGRATIONS_OAUTH_GITHUB_AUTH_URI:https://github.com/login/oauth/authorize}
+        token-uri: ${APP_INTEGRATIONS_OAUTH_GITHUB_TOKEN_URI:https://github.com/login/oauth/access_token}
+        scopes: ${APP_INTEGRATIONS_OAUTH_GITHUB_SCOPES:repo,read:org}
+        redirect-uri: ${APP_INTEGRATIONS_OAUTH_GITHUB_REDIRECT_URI:}
+      monday:
+        enabled: ${APP_INTEGRATIONS_OAUTH_MONDAY_ENABLED:false}
+        client-id: ${APP_INTEGRATIONS_OAUTH_MONDAY_CLIENT_ID:}
+        client-secret: ${APP_INTEGRATIONS_OAUTH_MONDAY_CLIENT_SECRET:}
+        authorization-uri: ${APP_INTEGRATIONS_OAUTH_MONDAY_AUTH_URI:https://auth.monday.com/oauth2/authorize}
+        token-uri: ${APP_INTEGRATIONS_OAUTH_MONDAY_TOKEN_URI:https://auth.monday.com/oauth2/token}
+        scopes: ${APP_INTEGRATIONS_OAUTH_MONDAY_SCOPES:}
+        redirect-uri: ${APP_INTEGRATIONS_OAUTH_MONDAY_REDIRECT_URI:}
+      slack:
+        enabled: ${APP_INTEGRATIONS_OAUTH_SLACK_ENABLED:false}
+        client-id: ${APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_ID:}
+        client-secret: ${APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_SECRET:}
+        authorization-uri: ${APP_INTEGRATIONS_OAUTH_SLACK_AUTH_URI:https://slack.com/oauth/v2/authorize}
+        token-uri: ${APP_INTEGRATIONS_OAUTH_SLACK_TOKEN_URI:https://slack.com/api/oauth.v2.access}
+        scopes: ${APP_INTEGRATIONS_OAUTH_SLACK_SCOPES:}
+        redirect-uri: ${APP_INTEGRATIONS_OAUTH_SLACK_REDIRECT_URI:}
   task-key-regex: '([A-Z]{2,10}-[a-zA-Z0-9]+)'
   snapshots:
     cron: "0 5 0 * * *"

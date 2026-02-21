@@ -547,7 +547,7 @@ function IntegrationsPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  const loadData = () => {
+  const loadData = (oauthNotice?: { system: IntegrationSystem; message: string }) => {
     setLoading(true);
     Promise.all([
       fetch('/api/kpi/admin/integrations/connections'),
@@ -572,7 +572,7 @@ function IntegrationsPage() {
         ) as Record<IntegrationSystem, IntegrationDraft>;
 
         setConnectionDrafts(bySystem);
-        setConnectionMessages({});
+        setConnectionMessages(oauthNotice ? { [oauthNotice.system]: oauthNotice.message } : {});
         setConnectionTests({});
         setRepoRows(
           repos.map((row) => ({
@@ -593,7 +593,20 @@ function IntegrationsPage() {
   };
 
   useEffect(() => {
-    loadData();
+    const params = new URLSearchParams(window.location.search);
+    const oauthSystem = params.get('oauthSystem');
+    const oauthStatus = params.get('oauthStatus');
+    const oauthMessage = params.get('oauthMessage');
+
+    let oauthNotice: { system: IntegrationSystem; message: string } | undefined;
+    if (oauthSystem && oauthStatus && INTEGRATION_SYSTEMS.includes(oauthSystem as IntegrationSystem)) {
+      const system = oauthSystem as IntegrationSystem;
+      const messagePrefix = oauthStatus === 'connected' ? 'SSO connected' : 'SSO failed';
+      oauthNotice = { system, message: `${messagePrefix}: ${oauthMessage ?? '-'}` };
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    loadData(oauthNotice);
   }, []);
 
   const setDraft = (system: IntegrationSystem, updater: (draft: IntegrationDraft) => IntegrationDraft) => {
@@ -678,6 +691,29 @@ function IntegrationsPage() {
             message: testError instanceof Error ? testError.message : 'Connection test failed',
             missing: [],
           },
+        }));
+      });
+  };
+
+  const startSsoConnect = (system: IntegrationSystem) => {
+    fetch(`/api/kpi/admin/integrations/oauth/${system}/authorize-url`)
+      .then(async (response) => {
+        if (!response.ok) {
+          const responseBody = await response.text();
+          throw new Error(`SSO authorize failed for ${system}: ${response.status} ${responseBody}`);
+        }
+        return response.json() as Promise<{ authorizationUrl: string }>;
+      })
+      .then((payload) => {
+        if (!payload.authorizationUrl) {
+          throw new Error('Missing authorization URL from server');
+        }
+        window.location.href = payload.authorizationUrl;
+      })
+      .catch((oauthError) => {
+        setConnectionMessages((previous) => ({
+          ...previous,
+          [system]: oauthError instanceof Error ? oauthError.message : `SSO start failed for ${system}`,
         }));
       });
   };
@@ -859,6 +895,15 @@ function IntegrationsPage() {
                 >
                   Test
                 </button>
+                {system !== 'EMAIL' ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                    onClick={() => startSsoConnect(system)}
+                  >
+                    Connect via SSO
+                  </button>
+                ) : null}
               </div>
               {infoMessage ? <p className="mt-2 text-xs text-slate-600">{infoMessage}</p> : null}
               {draft.updatedAt ? (
@@ -1033,7 +1078,7 @@ function IntegrationsPage() {
           <button
             type="button"
             className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
-            onClick={loadData}
+            onClick={() => loadData()}
           >
             Reload
           </button>
