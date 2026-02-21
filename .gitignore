@@ -12,6 +12,8 @@
 # Node/frontend
 /frontend/node_modules/
 /frontend/dist/
+/frontend/node/
+/frontend/tsconfig.tsbuildinfo
 
 # Logs
 *.log
