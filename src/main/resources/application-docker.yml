@@ -1,10 +1,9 @@
 spring:
+  jpa:
+    show-sql: false
   datasource:
     hikari:
       maximum-pool-size: 8
-  data:
-    redis:
-      timeout: 5s
 
 management:
   endpoint:

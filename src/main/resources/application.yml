@@ -1,6 +1,31 @@
 spring:
   application:
     name: snayvik-ct
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/snayvik_kpi}
+    username: ${SPRING_DATASOURCE_USERNAME:snayvik}
+    password: ${SPRING_DATASOURCE_PASSWORD:snayvik}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 5s
+
+app:
+  ingestion:
+    queue-name: kpi:recalc:jobs
+  integrations:
+    github:
+      webhook-secret: ${GITHUB_WEBHOOK_SECRET:change-me}
+    monday:
+      webhook-token: ${MONDAY_WEBHOOK_TOKEN:change-me}
+  task-key-regex: '([A-Z]{2,10}-[a-zA-Z0-9]+)'
 
 management:
   endpoints:
