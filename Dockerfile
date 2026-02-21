@@ -1,7 +1,7 @@
 FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY . .
-RUN ./mvnw clean package -DskipTests
+RUN MAVEN_CONFIG="" ./mvnw clean package -DskipTests
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
