@@ -47,6 +47,8 @@ app:
     github-repositories: ${APP_SYNC_GITHUB_REPOSITORIES:}
   health:
     queue-backlog-critical: 1000
+  security:
+    integration-encryption-key: ${APP_INTEGRATION_ENCRYPTION_KEY:U25heXZpa0RlZmF1bHRJbnRlZ3JhdGlvbktleTEyMzQ1Njc4OTA=}
   seed:
     enabled: ${APP_SEED_ENABLED:false}
 

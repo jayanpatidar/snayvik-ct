@@ -4,6 +4,8 @@ import com.snayvik.kpi.ingress.persistence.BoardMapping;
 import com.snayvik.kpi.ingress.persistence.BoardMappingRepository;
 import com.snayvik.kpi.ingress.persistence.GitHubActivityPersistenceService;
 import com.snayvik.kpi.ingress.persistence.MondayTaskPersistenceService;
+import com.snayvik.kpi.integration.RepoMapping;
+import com.snayvik.kpi.integration.RepoMappingRepository;
 import com.snayvik.kpi.kpi.KpiComputationService;
 import com.snayvik.kpi.policy.PolicyEvaluationService;
 import com.snayvik.kpi.time.TimeGovernanceService;
@@ -21,6 +23,7 @@ public class InitialFullSyncService {
 
     private final SyncProperties syncProperties;
     private final BoardMappingRepository boardMappingRepository;
+    private final RepoMappingRepository repoMappingRepository;
     private final MondaySyncClient mondaySyncClient;
     private final GitHubSyncClient gitHubSyncClient;
     private final MondayTaskPersistenceService mondayTaskPersistenceService;
@@ -33,6 +36,7 @@ public class InitialFullSyncService {
     public InitialFullSyncService(
             SyncProperties syncProperties,
             BoardMappingRepository boardMappingRepository,
+            RepoMappingRepository repoMappingRepository,
             MondaySyncClient mondaySyncClient,
             GitHubSyncClient gitHubSyncClient,
             MondayTaskPersistenceService mondayTaskPersistenceService,
@@ -43,6 +47,7 @@ public class InitialFullSyncService {
             Clock clock) {
         this.syncProperties = syncProperties;
         this.boardMappingRepository = boardMappingRepository;
+        this.repoMappingRepository = repoMappingRepository;
         this.mondaySyncClient = mondaySyncClient;
         this.gitHubSyncClient = gitHubSyncClient;
         this.mondayTaskPersistenceService = mondayTaskPersistenceService;
@@ -92,7 +97,7 @@ public class InitialFullSyncService {
             }
         }
 
-        List<String> repositories = normalizeRepositories(syncProperties.getGithubRepositories());
+        List<String> repositories = resolveRepositories();
         Instant since = Instant.now(clock).minus(Duration.ofDays(Math.max(1, syncProperties.getGithubLookbackDays())));
         for (String repository : repositories) {
             githubRepositoriesScanned++;
@@ -142,5 +147,19 @@ public class InitialFullSyncService {
                 .map(String::trim)
                 .distinct()
                 .toList();
+    }
+
+    private List<String> resolveRepositories() {
+        Set<String> repositories = new LinkedHashSet<>(normalizeRepositories(syncProperties.getGithubRepositories()));
+        for (RepoMapping repoMapping : repoMappingRepository.findAllByOrderByRepositoryAsc()) {
+            if (!repoMapping.isEnabled()) {
+                continue;
+            }
+            if (repoMapping.getRepository() == null || repoMapping.getRepository().isBlank()) {
+                continue;
+            }
+            repositories.add(repoMapping.getRepository().trim());
+        }
+        return List.copyOf(repositories);
     }
 }

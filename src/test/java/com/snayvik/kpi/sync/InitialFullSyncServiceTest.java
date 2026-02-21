@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.snayvik.kpi.integration.RepoMappingRepository;
 import com.snayvik.kpi.ingress.persistence.BoardMapping;
 import com.snayvik.kpi.ingress.persistence.BoardMappingRepository;
 import com.snayvik.kpi.ingress.persistence.GitHubActivityPersistenceService;
@@ -30,6 +31,9 @@ class InitialFullSyncServiceTest {
 
     @Mock
     private BoardMappingRepository boardMappingRepository;
+
+    @Mock
+    private RepoMappingRepository repoMappingRepository;
 
     @Mock
     private MondaySyncClient mondaySyncClient;
@@ -63,6 +67,7 @@ class InitialFullSyncServiceTest {
         initialFullSyncService = new InitialFullSyncService(
                 syncProperties,
                 boardMappingRepository,
+                repoMappingRepository,
                 mondaySyncClient,
                 gitHubSyncClient,
                 mondayTaskPersistenceService,
@@ -82,6 +87,7 @@ class InitialFullSyncServiceTest {
         assertThat(report.enabled()).isFalse();
         assertThat(report.runType()).isEqualTo(SyncRunType.INITIAL_FULL_SYNC);
         verify(boardMappingRepository, never()).findAll();
+        verify(repoMappingRepository, never()).findAllByOrderByRepositoryAsc();
     }
 
     @Test
@@ -93,6 +99,7 @@ class InitialFullSyncServiceTest {
         BoardMapping mapping = mock(BoardMapping.class);
         when(mapping.getBoardId()).thenReturn("9988");
         when(boardMappingRepository.findAll()).thenReturn(List.of(mapping));
+        when(repoMappingRepository.findAllByOrderByRepositoryAsc()).thenReturn(List.of());
 
         MondayTaskSnapshot mondayTaskSnapshot = new MondayTaskSnapshot(
                 "123",

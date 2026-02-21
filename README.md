@@ -63,6 +63,29 @@ curl -X POST -u admin:'AdminPass@123' http://localhost:8080/api/kpi/admin/sync/r
 ```
 - Nightly reconciliation cron: `app.sync.reconciliation-cron` (default `0 30 2 * * *`).
 
+## Integration linking APIs (admin)
+- Manage integration connections for `GITHUB`, `MONDAY`, `SLACK`, and `EMAIL`:
+```bash
+curl -u admin:'AdminPass@123' http://localhost:8080/api/kpi/admin/integrations/connections
+curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integrations/connections/GITHUB \
+  -H 'Content-Type: application/json' \
+  -H 'X-Actor: admin-ui' \
+  -d '{"active":true,"settings":{"org":"snayvik"},"secret":"ghp_xxx"}'
+curl -u admin:'AdminPass@123' -X POST http://localhost:8080/api/kpi/admin/integrations/connections/GITHUB/test
+```
+- Manage repository mappings used by sync:
+```bash
+curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integrations/repositories \
+  -H 'Content-Type: application/json' \
+  -d '[{"repository":"snayvik/core-api","enabled":true,"allowedPrefixes":["SNAY"]}]'
+```
+- Manage monday board mappings:
+```bash
+curl -u admin:'AdminPass@123' -X PUT http://localhost:8080/api/kpi/admin/integrations/boards \
+  -H 'Content-Type: application/json' \
+  -d '[{"prefix":"SNAY","boardId":"2001001","boardName":"Snayvik Product Delivery"}]'
+```
+
 ## Authentication
 - UI routes are protected and redirect unauthenticated users to `/login`.
 - `/api/**` requires authentication.
