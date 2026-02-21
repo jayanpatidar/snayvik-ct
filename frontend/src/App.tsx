@@ -7,6 +7,11 @@ type DashboardOverview = {
   avgRiskScore: number;
   avgReworkRate: number;
   snapshots: SnapshotPoint[];
+  riskBands: RiskBands;
+  statusBreakdown: StatusBreakdownRow[];
+  prefixSummary: PrefixSummaryRow[];
+  topRiskTasks: TopRiskTaskRow[];
+  openViolations: ViolationSummary;
 };
 
 type SnapshotPoint = {
@@ -16,6 +21,49 @@ type SnapshotPoint = {
   avgRiskScore: number;
   driftRate: number;
   reworkRate: number;
+};
+
+type RiskBands = {
+  green: number;
+  yellow: number;
+  red: number;
+  unknown: number;
+};
+
+type StatusBreakdownRow = {
+  status: string;
+  count: number;
+};
+
+type PrefixSummaryRow = {
+  prefix: string;
+  taskCount: number;
+  doneCount: number;
+  driftedCount: number;
+  highRiskCount: number;
+  avgLeadTimeSeconds: number;
+  avgRiskScore: number;
+  avgReworkRate: number;
+};
+
+type TopRiskTaskRow = {
+  taskKey: string;
+  prefix: string;
+  status: string;
+  riskScore: number;
+  leadTimeSeconds: number;
+  reworkRate: number;
+  commitCount: number;
+  driftScore: number;
+};
+
+type ViolationSummary = {
+  totalOpen: number;
+  high: number;
+  medium: number;
+  warn: number;
+  low: number;
+  bySeverity: Record<string, number>;
 };
 
 type GovernanceRule = {
@@ -292,6 +340,10 @@ function DashboardPage() {
       : (overview?.avgRiskScore ?? 0) <= 60
         ? 'text-amber-600'
         : 'text-rose-600';
+  const doneTaskCount = overview?.statusBreakdown.find((entry) => entry.status.toLowerCase() === 'done')?.count ?? 0;
+  const topRiskCount = overview?.riskBands.red ?? 0;
+  const openViolationCount = overview?.openViolations.totalOpen ?? 0;
+  const activePrefixCount = overview?.prefixSummary.length ?? 0;
 
   return (
     <section className="mx-auto max-w-6xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -317,6 +369,25 @@ function DashboardPage() {
         </article>
       </div>
 
+      <div className="mt-4 grid gap-4 md:grid-cols-4">
+        <article className="rounded-lg border border-slate-200 bg-emerald-50 p-4">
+          <p className="text-xs uppercase tracking-wide text-emerald-700">Done Tasks</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700">{doneTaskCount}</p>
+        </article>
+        <article className="rounded-lg border border-slate-200 bg-rose-50 p-4">
+          <p className="text-xs uppercase tracking-wide text-rose-700">High Risk Tasks</p>
+          <p className="mt-1 text-2xl font-semibold text-rose-700">{topRiskCount}</p>
+        </article>
+        <article className="rounded-lg border border-slate-200 bg-amber-50 p-4">
+          <p className="text-xs uppercase tracking-wide text-amber-700">Open Violations</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-700">{openViolationCount}</p>
+        </article>
+        <article className="rounded-lg border border-slate-200 bg-sky-50 p-4">
+          <p className="text-xs uppercase tracking-wide text-sky-700">Active Prefixes</p>
+          <p className="mt-1 text-2xl font-semibold text-sky-700">{activePrefixCount}</p>
+        </article>
+      </div>
+
       {loading ? <p className="mt-4 text-sm text-slate-500">Loading dashboard data...</p> : null}
       {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
 
@@ -334,6 +405,107 @@ function DashboardPage() {
         </ResponsiveContainer>
       </div>
       <p className="mt-2 text-xs text-slate-500">Orange: avg risk score, Blue: avg lead time (hours)</p>
+
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <article className="rounded-lg border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Risk Distribution</h3>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-700">Green: {overview?.riskBands.green ?? 0}</div>
+            <div className="rounded-md bg-amber-50 px-3 py-2 text-amber-700">Yellow: {overview?.riskBands.yellow ?? 0}</div>
+            <div className="rounded-md bg-rose-50 px-3 py-2 text-rose-700">Red: {overview?.riskBands.red ?? 0}</div>
+            <div className="rounded-md bg-slate-100 px-3 py-2 text-slate-700">Unknown: {overview?.riskBands.unknown ?? 0}</div>
+          </div>
+        </article>
+        <article className="rounded-lg border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Status Breakdown</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(overview?.statusBreakdown ?? []).map((row) => (
+              <span key={row.status} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                {row.status}: {row.count}
+              </span>
+            ))}
+            {(overview?.statusBreakdown ?? []).length === 0 ? (
+              <span className="text-xs text-slate-500">No task status data available.</span>
+            ) : null}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Violations by severity: HIGH {overview?.openViolations.high ?? 0} | WARN {overview?.openViolations.warn ?? 0} |
+            MEDIUM {overview?.openViolations.medium ?? 0} | LOW {overview?.openViolations.low ?? 0}
+          </p>
+        </article>
+      </div>
+
+      <article className="mt-8 rounded-lg border border-slate-200 p-4">
+        <h3 className="text-sm font-semibold text-slate-900">Prefix Performance</h3>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-slate-600">
+                <th className="px-2 py-2">Prefix</th>
+                <th className="px-2 py-2">Tasks</th>
+                <th className="px-2 py-2">Done</th>
+                <th className="px-2 py-2">High Risk</th>
+                <th className="px-2 py-2">Drifted</th>
+                <th className="px-2 py-2">Avg Lead</th>
+                <th className="px-2 py-2">Avg Risk</th>
+                <th className="px-2 py-2">Avg Rework</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(overview?.prefixSummary ?? []).map((row) => (
+                <tr key={row.prefix} className="border-b border-slate-100">
+                  <td className="px-2 py-2 font-medium text-slate-900">{row.prefix}</td>
+                  <td className="px-2 py-2 text-slate-600">{row.taskCount}</td>
+                  <td className="px-2 py-2 text-slate-600">{row.doneCount}</td>
+                  <td className="px-2 py-2 text-rose-700">{row.highRiskCount}</td>
+                  <td className="px-2 py-2 text-amber-700">{row.driftedCount}</td>
+                  <td className="px-2 py-2 text-slate-600">{(row.avgLeadTimeSeconds / 3600).toFixed(1)}h</td>
+                  <td className="px-2 py-2 text-slate-600">{row.avgRiskScore.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-slate-600">{(row.avgReworkRate * 100).toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(overview?.prefixSummary ?? []).length === 0 ? <p className="mt-2 text-xs text-slate-500">No prefix data available.</p> : null}
+        </div>
+      </article>
+
+      <article className="mt-6 rounded-lg border border-slate-200 p-4">
+        <h3 className="text-sm font-semibold text-slate-900">Top Risk Tasks</h3>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-slate-600">
+                <th className="px-2 py-2">Task</th>
+                <th className="px-2 py-2">Prefix</th>
+                <th className="px-2 py-2">Status</th>
+                <th className="px-2 py-2">Risk</th>
+                <th className="px-2 py-2">Lead</th>
+                <th className="px-2 py-2">Rework</th>
+                <th className="px-2 py-2">Commits</th>
+                <th className="px-2 py-2">Drift</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(overview?.topRiskTasks ?? []).map((row) => (
+                <tr key={row.taskKey} className="border-b border-slate-100">
+                  <td className="px-2 py-2 font-medium text-slate-900">{row.taskKey}</td>
+                  <td className="px-2 py-2 text-slate-600">{row.prefix}</td>
+                  <td className="px-2 py-2 text-slate-600">{row.status}</td>
+                  <td className={`px-2 py-2 font-medium ${row.riskScore > 60 ? 'text-rose-600' : row.riskScore > 30 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {row.riskScore.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-2 text-slate-600">{(row.leadTimeSeconds / 3600).toFixed(1)}h</td>
+                  <td className="px-2 py-2 text-slate-600">{(row.reworkRate * 100).toFixed(1)}%</td>
+                  <td className="px-2 py-2 text-slate-600">{row.commitCount}</td>
+                  <td className="px-2 py-2 text-slate-600">{row.driftScore.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(overview?.topRiskTasks ?? []).length === 0 ? <p className="mt-2 text-xs text-slate-500">No risk-ranked task data available.</p> : null}
+        </div>
+      </article>
     </section>
   );
 }
