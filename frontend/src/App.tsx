@@ -85,6 +85,110 @@ type HealthSummary = {
   webhookFailed: number;
 };
 
+type IntegrationSystem = 'GITHUB' | 'MONDAY' | 'SLACK' | 'EMAIL';
+
+type IntegrationConnectionView = {
+  system: IntegrationSystem;
+  active: boolean;
+  settings: Record<string, string>;
+  hasSecret: boolean;
+  secretUpdatedAt?: string;
+  updatedBy?: string;
+  updatedAt?: string;
+};
+
+type IntegrationConnectionTestResult = {
+  success: boolean;
+  message: string;
+  missing: string[];
+};
+
+type IntegrationDraft = {
+  active: boolean;
+  settings: Record<string, string>;
+  secret: string;
+  clearSecret: boolean;
+  hasSecret: boolean;
+  secretUpdatedAt?: string;
+  updatedBy?: string;
+  updatedAt?: string;
+};
+
+type RepoMappingView = {
+  repository: string;
+  enabled: boolean;
+  allowedPrefixes: string[];
+  updatedBy?: string;
+  updatedAt?: string;
+};
+
+type RepoMappingEditorRow = {
+  repository: string;
+  enabled: boolean;
+  allowedPrefixes: string;
+};
+
+type BoardMappingView = {
+  prefix: string;
+  boardId: string;
+  boardName: string;
+};
+
+type SyncRunReport = {
+  runType: string;
+  enabled: boolean;
+  startedAt: string;
+  finishedAt: string;
+  boardsScanned: number;
+  mondayItemsProcessed: number;
+  githubRepositoriesScanned: number;
+  githubPullRequestsProcessed: number;
+  githubCommitsProcessed: number;
+  touchedTasks: number;
+  tasksRecomputed: number;
+};
+
+const INTEGRATION_SYSTEMS: IntegrationSystem[] = ['GITHUB', 'MONDAY', 'SLACK', 'EMAIL'];
+
+const INTEGRATION_SETTING_FIELDS: Record<IntegrationSystem, Array<{ key: string; label: string; placeholder: string }>> = {
+  GITHUB: [{ key: 'org', label: 'Organization', placeholder: 'snayvik-org' }],
+  MONDAY: [{ key: 'apiUrl', label: 'API URL', placeholder: 'https://api.monday.com/v2' }],
+  SLACK: [{ key: 'channel', label: 'Channel', placeholder: '#engineering-alerts' }],
+  EMAIL: [
+    { key: 'smtpHost', label: 'SMTP Host', placeholder: 'smtp.example.com' },
+    { key: 'fromAddress', label: 'From Address', placeholder: 'kpi@snayvik.com' },
+  ],
+};
+
+function createEmptyIntegrationDraft(): IntegrationDraft {
+  return {
+    active: false,
+    settings: {},
+    secret: '',
+    clearSecret: false,
+    hasSecret: false,
+    secretUpdatedAt: undefined,
+    updatedBy: undefined,
+    updatedAt: undefined,
+  };
+}
+
+function toIntegrationDraft(view?: IntegrationConnectionView): IntegrationDraft {
+  if (!view) {
+    return createEmptyIntegrationDraft();
+  }
+  return {
+    active: view.active,
+    settings: view.settings ?? {},
+    secret: '',
+    clearSecret: false,
+    hasSecret: view.hasSecret,
+    secretUpdatedAt: view.secretUpdatedAt,
+    updatedBy: view.updatedBy,
+    updatedAt: view.updatedAt,
+  };
+}
+
 function Header() {
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -116,6 +220,12 @@ function Header() {
           className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
         >
           Access
+        </a>
+        <a
+          href="/admin/integrations"
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+        >
+          Integrations
         </a>
         <a href="/health" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
           Health
@@ -419,6 +529,521 @@ function AdminPoliciesPage() {
   );
 }
 
+function IntegrationsPage() {
+  const [actor, setActor] = useState<string>('admin-ui');
+  const [connectionDrafts, setConnectionDrafts] = useState<Record<IntegrationSystem, IntegrationDraft>>(() =>
+    Object.fromEntries(INTEGRATION_SYSTEMS.map((system) => [system, createEmptyIntegrationDraft()])) as Record<
+      IntegrationSystem,
+      IntegrationDraft
+    >,
+  );
+  const [connectionMessages, setConnectionMessages] = useState<Partial<Record<IntegrationSystem, string>>>({});
+  const [connectionTests, setConnectionTests] = useState<Partial<Record<IntegrationSystem, IntegrationConnectionTestResult>>>({});
+  const [repoRows, setRepoRows] = useState<RepoMappingEditorRow[]>([]);
+  const [boardRows, setBoardRows] = useState<BoardMappingView[]>([]);
+  const [repoMessage, setRepoMessage] = useState<string>('');
+  const [boardMessage, setBoardMessage] = useState<string>('');
+  const [syncMessage, setSyncMessage] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+
+  const loadData = () => {
+    setLoading(true);
+    Promise.all([
+      fetch('/api/kpi/admin/integrations/connections'),
+      fetch('/api/kpi/admin/integrations/repositories'),
+      fetch('/api/kpi/admin/integrations/boards'),
+    ])
+      .then(async ([connectionsRes, reposRes, boardsRes]) => {
+        if (!connectionsRes.ok || !reposRes.ok || !boardsRes.ok) {
+          throw new Error(
+            `Load failed: connections=${connectionsRes.status}, repos=${reposRes.status}, boards=${boardsRes.status}`,
+          );
+        }
+        const connections = (await connectionsRes.json()) as IntegrationConnectionView[];
+        const repos = (await reposRes.json()) as RepoMappingView[];
+        const boards = (await boardsRes.json()) as BoardMappingView[];
+
+        const bySystem = Object.fromEntries(
+          INTEGRATION_SYSTEMS.map((system) => {
+            const found = connections.find((item) => item.system === system);
+            return [system, toIntegrationDraft(found)];
+          }),
+        ) as Record<IntegrationSystem, IntegrationDraft>;
+
+        setConnectionDrafts(bySystem);
+        setConnectionMessages({});
+        setConnectionTests({});
+        setRepoRows(
+          repos.map((row) => ({
+            repository: row.repository,
+            enabled: row.enabled,
+            allowedPrefixes: row.allowedPrefixes.join(','),
+          })),
+        );
+        setBoardRows(boards);
+        setError('');
+      })
+      .catch((fetchError) => {
+        setError(fetchError instanceof Error ? fetchError.message : 'Failed to load integration data');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const setDraft = (system: IntegrationSystem, updater: (draft: IntegrationDraft) => IntegrationDraft) => {
+    setConnectionDrafts((previous) => ({ ...previous, [system]: updater(previous[system]) }));
+  };
+
+  const setSetting = (system: IntegrationSystem, key: string, value: string) => {
+    setDraft(system, (draft) => ({
+      ...draft,
+      settings: {
+        ...draft.settings,
+        [key]: value,
+      },
+    }));
+  };
+
+  const saveConnection = (system: IntegrationSystem) => {
+    const draft = connectionDrafts[system];
+    const payload: {
+      active: boolean;
+      settings: Record<string, string>;
+      secret?: string;
+      clearSecret?: boolean;
+    } = {
+      active: draft.active,
+      settings: draft.settings,
+    };
+    if (draft.secret.trim()) {
+      payload.secret = draft.secret.trim();
+    }
+    if (draft.clearSecret) {
+      payload.clearSecret = true;
+    }
+
+    fetch(`/api/kpi/admin/integrations/connections/${system}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Actor': actor,
+      },
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Save failed for ${system}: ${response.status}`);
+        }
+        return response.json() as Promise<IntegrationConnectionView>;
+      })
+      .then((saved) => {
+        setDraft(system, () => toIntegrationDraft(saved));
+        setConnectionMessages((previous) => ({ ...previous, [system]: 'Saved' }));
+        setConnectionTests((previous) => {
+          const copy = { ...previous };
+          delete copy[system];
+          return copy;
+        });
+      })
+      .catch((saveError) => {
+        setConnectionMessages((previous) => ({
+          ...previous,
+          [system]: saveError instanceof Error ? saveError.message : `Save failed for ${system}`,
+        }));
+      });
+  };
+
+  const testConnection = (system: IntegrationSystem) => {
+    fetch(`/api/kpi/admin/integrations/connections/${system}/test`, { method: 'POST' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Test failed for ${system}: ${response.status}`);
+        }
+        return response.json() as Promise<IntegrationConnectionTestResult>;
+      })
+      .then((result) => {
+        setConnectionTests((previous) => ({ ...previous, [system]: result }));
+      })
+      .catch((testError) => {
+        setConnectionTests((previous) => ({
+          ...previous,
+          [system]: {
+            success: false,
+            message: testError instanceof Error ? testError.message : 'Connection test failed',
+            missing: [],
+          },
+        }));
+      });
+  };
+
+  const saveRepositories = () => {
+    const payload = repoRows
+      .filter((row) => row.repository.trim())
+      .map((row) => ({
+        repository: row.repository.trim(),
+        enabled: row.enabled,
+        allowedPrefixes: row.allowedPrefixes
+          .split(',')
+          .map((value) => value.trim().toUpperCase())
+          .filter((value) => value.length > 0),
+      }));
+
+    fetch('/api/kpi/admin/integrations/repositories', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Actor': actor,
+      },
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to save repositories: ${response.status}`);
+        }
+        return response.json() as Promise<RepoMappingView[]>;
+      })
+      .then((saved) => {
+        setRepoRows(
+          saved.map((row) => ({
+            repository: row.repository,
+            enabled: row.enabled,
+            allowedPrefixes: row.allowedPrefixes.join(','),
+          })),
+        );
+        setRepoMessage('Repository mappings saved');
+      })
+      .catch((saveError) => {
+        setRepoMessage(saveError instanceof Error ? saveError.message : 'Failed to save repositories');
+      });
+  };
+
+  const saveBoards = () => {
+    const payload = boardRows
+      .filter((row) => row.prefix.trim() && row.boardId.trim())
+      .map((row) => ({
+        prefix: row.prefix.trim().toUpperCase(),
+        boardId: row.boardId.trim(),
+        boardName: row.boardName.trim(),
+      }));
+
+    fetch('/api/kpi/admin/integrations/boards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to save boards: ${response.status}`);
+        }
+        return response.json() as Promise<BoardMappingView[]>;
+      })
+      .then((saved) => {
+        setBoardRows(saved);
+        setBoardMessage('Board mappings saved');
+      })
+      .catch((saveError) => {
+        setBoardMessage(saveError instanceof Error ? saveError.message : 'Failed to save boards');
+      });
+  };
+
+  const runSync = (mode: 'full' | 'reconcile') => {
+    fetch(`/api/kpi/admin/sync/${mode}`, { method: 'POST' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`${mode} sync failed: ${response.status}`);
+        }
+        return response.json() as Promise<SyncRunReport>;
+      })
+      .then((report) => {
+        setSyncMessage(
+          `${report.runType} ${report.enabled ? 'completed' : 'disabled'}: touchedTasks=${report.touchedTasks}, tasksRecomputed=${report.tasksRecomputed}`,
+        );
+      })
+      .catch((syncError) => {
+        setSyncMessage(syncError instanceof Error ? syncError.message : 'Sync request failed');
+      });
+  };
+
+  return (
+    <section className="mx-auto max-w-6xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-2xl font-semibold">Integration Linking</h2>
+      <p className="mt-2 text-sm text-slate-600">
+        Configure GitHub, monday, Slack and email connections, then manage repository and board mappings.
+      </p>
+
+      <div className="mt-4 rounded-lg border border-slate-200 p-4">
+        <p className="text-sm font-semibold text-slate-900">Actor</p>
+        <p className="mt-1 text-xs text-slate-600">Recorded as updater for connection and repository mapping changes.</p>
+        <input
+          className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm md:w-80"
+          value={actor}
+          onChange={(event) => setActor(event.target.value)}
+          placeholder="admin-ui"
+        />
+      </div>
+
+      {loading ? <p className="mt-4 text-sm text-slate-500">Loading integration data...</p> : null}
+      {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {INTEGRATION_SYSTEMS.map((system) => {
+          const draft = connectionDrafts[system];
+          const fields = INTEGRATION_SETTING_FIELDS[system];
+          const testResult = connectionTests[system];
+          const infoMessage = connectionMessages[system];
+          return (
+            <article key={system} className="rounded-lg border border-slate-200 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">{system}</h3>
+                  <p className="text-xs text-slate-600">
+                    Secret: {draft.hasSecret ? 'configured' : 'not configured'}
+                    {draft.secretUpdatedAt ? ` (${draft.secretUpdatedAt})` : ''}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.active}
+                    onChange={(event) => setDraft(system, (value) => ({ ...value, active: event.target.checked }))}
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {fields.map((field) => (
+                  <input
+                    key={field.key}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    value={draft.settings[field.key] ?? ''}
+                    onChange={(event) => setSetting(system, field.key, event.target.value)}
+                    placeholder={`${field.label} (${field.placeholder})`}
+                  />
+                ))}
+                <input
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  type="password"
+                  value={draft.secret}
+                  onChange={(event) => setDraft(system, (value) => ({ ...value, secret: event.target.value, clearSecret: false }))}
+                  placeholder="New secret/token (leave empty to keep existing)"
+                />
+                <label className="flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={draft.clearSecret}
+                    onChange={(event) => setDraft(system, (value) => ({ ...value, clearSecret: event.target.checked, secret: '' }))}
+                  />
+                  Clear existing secret
+                </label>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700"
+                  onClick={() => saveConnection(system)}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => testConnection(system)}
+                >
+                  Test
+                </button>
+              </div>
+              {infoMessage ? <p className="mt-2 text-xs text-slate-600">{infoMessage}</p> : null}
+              {draft.updatedAt ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Updated by {draft.updatedBy ?? '-'} at {draft.updatedAt}
+                </p>
+              ) : null}
+              {testResult ? (
+                <p className={`mt-2 text-xs ${testResult.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {testResult.message}
+                  {testResult.missing.length > 0 ? ` missing=${testResult.missing.join(',')}` : ''}
+                </p>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="mt-8 rounded-lg border border-slate-200 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold">Repository Mappings</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+              onClick={() => setRepoRows((rows) => [...rows, { repository: '', enabled: true, allowedPrefixes: '' }])}
+            >
+              Add Row
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700"
+              onClick={saveRepositories}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-slate-600">Allowed prefixes is comma-separated. Example: JWV2,GOV.</p>
+        <div className="mt-3 space-y-2">
+          {repoRows.map((row, index) => (
+            <div key={`${row.repository}-${index}`} className="grid gap-2 md:grid-cols-12">
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-5"
+                value={row.repository}
+                onChange={(event) =>
+                  setRepoRows((rows) =>
+                    rows.map((existing, rowIndex) =>
+                      rowIndex === index ? { ...existing, repository: event.target.value } : existing,
+                    ),
+                  )
+                }
+                placeholder="org/repository"
+              />
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-5"
+                value={row.allowedPrefixes}
+                onChange={(event) =>
+                  setRepoRows((rows) =>
+                    rows.map((existing, rowIndex) =>
+                      rowIndex === index ? { ...existing, allowedPrefixes: event.target.value } : existing,
+                    ),
+                  )
+                }
+                placeholder="PREFIX1,PREFIX2"
+              />
+              <label className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={row.enabled}
+                  onChange={(event) =>
+                    setRepoRows((rows) =>
+                      rows.map((existing, rowIndex) =>
+                        rowIndex === index ? { ...existing, enabled: event.target.checked } : existing,
+                      ),
+                    )
+                  }
+                />
+                Enabled
+              </label>
+            </div>
+          ))}
+          {repoRows.length === 0 ? <p className="text-xs text-slate-500">No repository mappings configured.</p> : null}
+        </div>
+        {repoMessage ? <p className="mt-2 text-xs text-slate-600">{repoMessage}</p> : null}
+      </div>
+
+      <div className="mt-8 rounded-lg border border-slate-200 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold">Board Mappings</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+              onClick={() => setBoardRows((rows) => [...rows, { prefix: '', boardId: '', boardName: '' }])}
+            >
+              Add Row
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700"
+              onClick={saveBoards}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          {boardRows.map((row, index) => (
+            <div key={`${row.prefix}-${index}`} className="grid gap-2 md:grid-cols-12">
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-3"
+                value={row.prefix}
+                onChange={(event) =>
+                  setBoardRows((rows) =>
+                    rows.map((existing, rowIndex) =>
+                      rowIndex === index ? { ...existing, prefix: event.target.value.toUpperCase() } : existing,
+                    ),
+                  )
+                }
+                placeholder="PREFIX"
+              />
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-4"
+                value={row.boardId}
+                onChange={(event) =>
+                  setBoardRows((rows) =>
+                    rows.map((existing, rowIndex) =>
+                      rowIndex === index ? { ...existing, boardId: event.target.value } : existing,
+                    ),
+                  )
+                }
+                placeholder="Board ID"
+              />
+              <input
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm md:col-span-5"
+                value={row.boardName}
+                onChange={(event) =>
+                  setBoardRows((rows) =>
+                    rows.map((existing, rowIndex) =>
+                      rowIndex === index ? { ...existing, boardName: event.target.value } : existing,
+                    ),
+                  )
+                }
+                placeholder="Board Name"
+              />
+            </div>
+          ))}
+          {boardRows.length === 0 ? <p className="text-xs text-slate-500">No board mappings configured.</p> : null}
+        </div>
+        {boardMessage ? <p className="mt-2 text-xs text-slate-600">{boardMessage}</p> : null}
+      </div>
+
+      <div className="mt-8 rounded-lg border border-slate-200 p-4">
+        <h3 className="text-lg font-semibold">Sync Controls</h3>
+        <p className="mt-1 text-xs text-slate-600">Run full sync or reconciliation after changing mappings or integration tokens.</p>
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+            onClick={() => runSync('full')}
+          >
+            Run Full Sync
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+            onClick={() => runSync('reconcile')}
+          >
+            Run Reconcile
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+            onClick={loadData}
+          >
+            Reload
+          </button>
+        </div>
+        {syncMessage ? <p className="mt-2 text-xs text-slate-600">{syncMessage}</p> : null}
+      </div>
+    </section>
+  );
+}
+
 function TimeAccountabilityPage() {
   const [rows, setRows] = useState<TimeSummaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -668,11 +1293,13 @@ export function App() {
       <Header />
       {path.startsWith('/governance-rules') ? <GovernanceRulesPage /> : null}
       {path.startsWith('/admin/policies') ? <AdminPoliciesPage /> : null}
+      {path.startsWith('/admin/integrations') ? <IntegrationsPage /> : null}
       {path.startsWith('/time') ? <TimeAccountabilityPage /> : null}
       {path.startsWith('/admin/access') ? <AccessGovernancePage /> : null}
       {path.startsWith('/health') ? <SystemHealthPage /> : null}
       {!path.startsWith('/governance-rules')
         && !path.startsWith('/admin/policies')
+        && !path.startsWith('/admin/integrations')
         && !path.startsWith('/time')
         && !path.startsWith('/admin/access')
         && !path.startsWith('/health') ? (
