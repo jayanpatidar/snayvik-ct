@@ -125,6 +125,7 @@ APP_INTEGRATIONS_OAUTH_SLACK_ENABLED=true
 APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_ID=...
 APP_INTEGRATIONS_OAUTH_SLACK_CLIENT_SECRET=...
 ```
+For Docker compose, put the same vars into `.env` before `docker compose up -d` (compose forwards them to the app service).
 
 ## Docker compose
 ```bash

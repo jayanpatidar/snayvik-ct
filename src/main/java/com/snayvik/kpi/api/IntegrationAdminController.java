@@ -12,7 +12,8 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.springframework.http.HttpStatus;
+import java.util.Map;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/kpi/admin/integrations")
@@ -69,14 +69,14 @@ public class IntegrationAdminController {
     }
 
     @GetMapping("/oauth/{system}/authorize-url")
-    public IntegrationOAuthService.OAuthAuthorizationUrlResponse authorizeUrl(
+    public ResponseEntity<?> authorizeUrl(
             @PathVariable IntegrationSystem system,
             HttpServletRequest request,
             HttpSession session) {
         try {
-            return integrationOAuthService.createAuthorizationUrl(system, request, session);
+            return ResponseEntity.ok(integrationOAuthService.createAuthorizationUrl(system, request, session));
         } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+            return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
         }
     }
 
