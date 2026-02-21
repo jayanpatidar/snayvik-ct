@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.GitHubWebhookAuthService;
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -25,14 +26,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class GitHubWebhookController {
 
     private final WebhookEventStoreService webhookEventStoreService;
+    private final RecalculationJobPublisher recalculationJobPublisher;
     private final GitHubWebhookAuthService gitHubWebhookAuthService;
     private final ObjectMapper objectMapper;
 
     public GitHubWebhookController(
             WebhookEventStoreService webhookEventStoreService,
+            RecalculationJobPublisher recalculationJobPublisher,
             GitHubWebhookAuthService gitHubWebhookAuthService,
             ObjectMapper objectMapper) {
         this.webhookEventStoreService = webhookEventStoreService;
+        this.recalculationJobPublisher = recalculationJobPublisher;
         this.gitHubWebhookAuthService = gitHubWebhookAuthService;
         this.objectMapper = objectMapper;
     }
@@ -55,12 +59,18 @@ public class GitHubWebhookController {
                 deliveryId,
                 UUID.randomUUID().toString(),
                 payload);
+        boolean queued = false;
+        if (!result.duplicate() && result.eventId() != null) {
+            recalculationJobPublisher.publish(result.eventId(), WebhookEventSource.GITHUB);
+            queued = true;
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "accepted");
         response.put("source", "github");
         response.put("duplicate", result.duplicate());
         response.put("eventId", result.eventId());
+        response.put("queued", queued);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

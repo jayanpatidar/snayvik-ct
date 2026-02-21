@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.MondayDedupeKeyService;
 import com.snayvik.kpi.ingress.security.MondayWebhookAuthService;
 import java.io.IOException;
@@ -26,16 +27,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class MondayWebhookController {
 
     private final WebhookEventStoreService webhookEventStoreService;
+    private final RecalculationJobPublisher recalculationJobPublisher;
     private final MondayWebhookAuthService mondayWebhookAuthService;
     private final MondayDedupeKeyService mondayDedupeKeyService;
     private final ObjectMapper objectMapper;
 
     public MondayWebhookController(
             WebhookEventStoreService webhookEventStoreService,
+            RecalculationJobPublisher recalculationJobPublisher,
             MondayWebhookAuthService mondayWebhookAuthService,
             MondayDedupeKeyService mondayDedupeKeyService,
             ObjectMapper objectMapper) {
         this.webhookEventStoreService = webhookEventStoreService;
+        this.recalculationJobPublisher = recalculationJobPublisher;
         this.mondayWebhookAuthService = mondayWebhookAuthService;
         this.mondayDedupeKeyService = mondayDedupeKeyService;
         this.objectMapper = objectMapper;
@@ -62,12 +66,18 @@ public class MondayWebhookController {
                 dedupeKey,
                 UUID.randomUUID().toString(),
                 payload);
+        boolean queued = false;
+        if (!result.duplicate() && result.eventId() != null) {
+            recalculationJobPublisher.publish(result.eventId(), WebhookEventSource.MONDAY);
+            queued = true;
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "accepted");
         response.put("source", "monday");
         response.put("duplicate", result.duplicate());
         response.put("eventId", result.eventId());
+        response.put("queued", queued);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

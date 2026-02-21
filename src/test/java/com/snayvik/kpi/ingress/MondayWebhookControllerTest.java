@@ -2,6 +2,7 @@ package com.snayvik.kpi.ingress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.MondayDedupeKeyService;
 import com.snayvik.kpi.ingress.security.MondayWebhookAuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,12 +34,16 @@ class MondayWebhookControllerTest {
     @Mock
     private MondayDedupeKeyService mondayDedupeKeyService;
 
+    @Mock
+    private RecalculationJobPublisher recalculationJobPublisher;
+
     private MondayWebhookController mondayWebhookController;
 
     @BeforeEach
     void setUp() {
         mondayWebhookController = new MondayWebhookController(
                 webhookEventStoreService,
+                recalculationJobPublisher,
                 mondayWebhookAuthService,
                 mondayDedupeKeyService,
                 new ObjectMapper());
@@ -83,11 +89,33 @@ class MondayWebhookControllerTest {
         assertThat(response.getBody()).containsEntry("source", "monday");
         assertThat(response.getBody()).containsEntry("duplicate", false);
         assertThat(response.getBody()).containsEntry("eventId", 27L);
+        assertThat(response.getBody()).containsEntry("queued", true);
         verify(webhookEventStoreService)
                 .storeEvent(
                         org.mockito.ArgumentMatchers.eq(WebhookEventSource.MONDAY),
                         org.mockito.ArgumentMatchers.eq("evt-123"),
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.any());
+        verify(recalculationJobPublisher).publish(27L, WebhookEventSource.MONDAY);
+    }
+
+    @Test
+    void doesNotQueueDuplicateEvent() {
+        when(mondayWebhookAuthService.isAuthorized("Bearer good", null)).thenReturn(true);
+        when(mondayDedupeKeyService.resolveDedupeKey(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn("evt-123");
+        when(webhookEventStoreService.storeEvent(
+                        org.mockito.ArgumentMatchers.eq(WebhookEventSource.MONDAY),
+                        org.mockito.ArgumentMatchers.eq("evt-123"),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new WebhookStoreResult(null, true));
+
+        ResponseEntity<java.util.Map<String, Object>> response =
+                mondayWebhookController.receive("Bearer good", null, "{\"event\":{\"id\":\"evt-123\"}}");
+
+        assertThat(response.getBody()).containsEntry("duplicate", true);
+        assertThat(response.getBody()).containsEntry("queued", false);
+        verify(recalculationJobPublisher, never()).publish(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 }
