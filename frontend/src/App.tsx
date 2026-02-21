@@ -59,6 +59,23 @@ type TimeSummaryRow = {
   trackedState: string;
 };
 
+type AccessUser = {
+  id: string;
+  email: string;
+  name: string;
+  active: boolean;
+};
+
+type AccessAuditRow = {
+  id: number;
+  userId: string;
+  system: string;
+  action: string;
+  status: string;
+  performedBy: string;
+  timestamp: string;
+};
+
 function Header() {
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -84,6 +101,12 @@ function Header() {
         </a>
         <a href="/time" className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
           Time
+        </a>
+        <a
+          href="/admin/access"
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+        >
+          Access
         </a>
       </nav>
     </header>
@@ -440,6 +463,97 @@ function TimeAccountabilityPage() {
   );
 }
 
+function AccessGovernancePage() {
+  const [users, setUsers] = useState<AccessUser[]>([]);
+  const [audit, setAudit] = useState<AccessAuditRow[]>([]);
+  const [message, setMessage] = useState<string>('');
+  const [actor, setActor] = useState<string>('admin-ui');
+
+  const load = () => {
+    Promise.all([fetch('/api/kpi/admin/access/users'), fetch('/api/kpi/admin/access/audit')])
+      .then(async ([usersRes, auditRes]) => {
+        if (!usersRes.ok || !auditRes.ok) {
+          throw new Error('Failed to load access data');
+        }
+        setUsers((await usersRes.json()) as AccessUser[]);
+        setAudit((await auditRes.json()) as AccessAuditRow[]);
+      })
+      .catch((error) => {
+        setMessage(error instanceof Error ? error.message : 'Failed to load');
+      });
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const deactivate = (userId: string) => {
+    fetch(`/api/kpi/admin/access/users/${userId}/deactivate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ performedBy: actor }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Deactivate failed: ${response.status} ${text}`);
+        }
+        setMessage(`Deactivated ${userId}`);
+        load();
+      })
+      .catch((error) => {
+        setMessage(error instanceof Error ? error.message : 'Deactivate failed');
+      });
+  };
+
+  return (
+    <section className="mx-auto max-w-6xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-2xl font-semibold">Access Governance</h2>
+      <p className="mt-2 text-sm text-slate-600">Centralized user deprovisioning with audit trail and safety guards.</p>
+      <input
+        className="mt-3 rounded-md border border-slate-300 px-3 py-2 text-sm"
+        value={actor}
+        onChange={(event) => setActor(event.target.value)}
+        placeholder="Performed by user id"
+      />
+      {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
+
+      <h3 className="mt-6 text-lg font-semibold">Active Users</h3>
+      <div className="mt-3 space-y-2">
+        {users.map((user) => (
+          <article key={user.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+              <p className="text-xs text-slate-600">{user.email}</p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border border-rose-300 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+              onClick={() => deactivate(user.id)}
+            >
+              Deactivate
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <h3 className="mt-6 text-lg font-semibold">Audit Log</h3>
+      <div className="mt-3 space-y-2">
+        {audit.map((row) => (
+          <article key={row.id} className="rounded-lg border border-slate-200 p-3">
+            <p className="text-xs text-slate-800">
+              {row.system} {row.action} {row.userId} status={row.status}
+            </p>
+            <p className="text-xs text-slate-500">
+              by {row.performedBy} at {row.timestamp}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function App() {
   const path = window.location.pathname;
   return (
@@ -448,7 +562,11 @@ export function App() {
       {path.startsWith('/governance-rules') ? <GovernanceRulesPage /> : null}
       {path.startsWith('/admin/policies') ? <AdminPoliciesPage /> : null}
       {path.startsWith('/time') ? <TimeAccountabilityPage /> : null}
-      {!path.startsWith('/governance-rules') && !path.startsWith('/admin/policies') && !path.startsWith('/time') ? (
+      {path.startsWith('/admin/access') ? <AccessGovernancePage /> : null}
+      {!path.startsWith('/governance-rules')
+        && !path.startsWith('/admin/policies')
+        && !path.startsWith('/time')
+        && !path.startsWith('/admin/access') ? (
         <DashboardPage />
       ) : null}
     </main>
