@@ -34,7 +34,10 @@ public class GovernanceRulesController {
                         Map.of("code", "MISSING_TASK_KEY", "description", "PR/branch/commit must include one task_key."),
                         Map.of("code", "MULTIPLE_TASK_KEYS", "description", "Single PR must map to one task_key."),
                         Map.of("code", "DONE_WITHOUT_MERGE", "description", "Done status requires at least one merged PR."),
-                        Map.of("code", "DRIFT_AFTER_START", "description", "Description changes after start are drift violations.")),
+                        Map.of("code", "DRIFT_AFTER_START", "description", "Description changes after start are drift violations."),
+                        Map.of("code", "UNTRACKED_WORK", "description", "GitHub activity exists with no tracked time."),
+                        Map.of("code", "NO_TIME_ON_COMPLETED_TASK", "description", "Completed task with merged PR has zero tracked time."),
+                        Map.of("code", "UNJUSTIFIED_TIME", "description", "Tracked time exists without meaningful activity.")),
                 "thresholds", thresholds.stream().map(this::thresholdDto).toList());
     }
 

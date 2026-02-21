@@ -33,6 +33,8 @@ app:
     cron: "0 5 0 * * *"
   thresholds:
     cron: "0 */10 * * * *"
+  time-governance:
+    cron: "0 */15 * * * *"
 
 management:
   endpoints:

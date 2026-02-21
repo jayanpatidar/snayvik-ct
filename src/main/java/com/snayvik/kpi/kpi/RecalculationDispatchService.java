@@ -6,6 +6,7 @@ import com.snayvik.kpi.ingress.audit.WebhookEvent;
 import com.snayvik.kpi.ingress.audit.WebhookEventRepository;
 import com.snayvik.kpi.ingress.persistence.BoardMappingRepository;
 import com.snayvik.kpi.policy.PolicyEvaluationService;
+import com.snayvik.kpi.time.TimeGovernanceService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -20,18 +21,21 @@ public class RecalculationDispatchService {
     private final BoardMappingRepository boardMappingRepository;
     private final KpiComputationService kpiComputationService;
     private final PolicyEvaluationService policyEvaluationService;
+    private final TimeGovernanceService timeGovernanceService;
 
     public RecalculationDispatchService(
             WebhookEventRepository webhookEventRepository,
             TaskKeyExtractor taskKeyExtractor,
             BoardMappingRepository boardMappingRepository,
             KpiComputationService kpiComputationService,
-            PolicyEvaluationService policyEvaluationService) {
+            PolicyEvaluationService policyEvaluationService,
+            TimeGovernanceService timeGovernanceService) {
         this.webhookEventRepository = webhookEventRepository;
         this.taskKeyExtractor = taskKeyExtractor;
         this.boardMappingRepository = boardMappingRepository;
         this.kpiComputationService = kpiComputationService;
         this.policyEvaluationService = policyEvaluationService;
+        this.timeGovernanceService = timeGovernanceService;
     }
 
     @Transactional
@@ -48,6 +52,7 @@ public class RecalculationDispatchService {
         for (String taskKey : taskKeys) {
             kpiComputationService.recomputeTaskMetrics(taskKey);
             policyEvaluationService.evaluateTask(taskKey);
+            timeGovernanceService.evaluateTask(taskKey);
         }
         if (taskKeys.isEmpty()) {
             kpiComputationService.recomputeAllTaskMetrics();
