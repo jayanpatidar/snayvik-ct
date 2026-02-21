@@ -27,6 +27,6 @@ docker compose up --build
 ```
 
 This boots:
-- app on `:8080`
+- app on `:8086`
 - postgres on `:5432`
 - redis on `:6379`
