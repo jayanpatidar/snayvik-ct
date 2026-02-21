@@ -30,7 +30,12 @@ public class SpaRoutingFilter extends OncePerRequestFilter {
         String contextPath = request.getContextPath();
         String path = request.getRequestURI().substring(contextPath.length());
 
-        if (path.startsWith("/api") || path.startsWith("/webhooks") || path.startsWith("/actuator") || path.startsWith("/error")) {
+        if (path.startsWith("/api")
+                || path.startsWith("/webhooks")
+                || path.startsWith("/actuator")
+                || path.startsWith("/error")
+                || path.startsWith("/login")
+                || path.startsWith("/logout")) {
             return false;
         }
 
