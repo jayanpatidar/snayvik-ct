@@ -105,6 +105,7 @@ public class GitHubActivityPersistenceService {
         pullRequestActivity.setReopenCount(resolveReopenCount(payload, pullRequestActivity.getReopenCount()));
 
         pullRequestActivityRepository.save(pullRequestActivity);
+        updateTaskFromPullRequest(taskKey, pullRequestActivity);
     }
 
     private int resolveReopenCount(JsonNode payload, Integer current) {
@@ -138,7 +139,42 @@ public class GitHubActivityPersistenceService {
             commitActivity.setAuthor(resolveCommitAuthor(commitNode));
             commitActivity.setCommittedAt(parseInstant(commitNode.path("timestamp").asText(null)));
             commitActivityRepository.save(commitActivity);
+            updateTaskFromCommit(taskKey, commitActivity);
         }
+    }
+
+    private void updateTaskFromPullRequest(String taskKey, PullRequestActivity pullRequestActivity) {
+        if (taskKey == null || taskKey.isBlank()) {
+            return;
+        }
+        taskRepository.findById(taskKey).ifPresent(task -> {
+            if (task.getStartedAt() == null && pullRequestActivity.getOpenedAt() != null) {
+                task.setStartedAt(pullRequestActivity.getOpenedAt());
+            }
+            if (pullRequestActivity.getMergedAt() != null) {
+                if (task.getMergedAt() == null || pullRequestActivity.getMergedAt().isBefore(task.getMergedAt())) {
+                    task.setMergedAt(pullRequestActivity.getMergedAt());
+                }
+            }
+            taskRepository.save(task);
+        });
+    }
+
+    private void updateTaskFromCommit(String taskKey, CommitActivity commitActivity) {
+        if (taskKey == null || taskKey.isBlank()) {
+            return;
+        }
+        taskRepository.findById(taskKey).ifPresent(task -> {
+            if (task.getStartedAt() == null && commitActivity.getCommittedAt() != null) {
+                task.setStartedAt(commitActivity.getCommittedAt());
+            }
+            if (commitActivity.getCommittedAt() != null) {
+                if (task.getFirstCommitAt() == null || commitActivity.getCommittedAt().isBefore(task.getFirstCommitAt())) {
+                    task.setFirstCommitAt(commitActivity.getCommittedAt());
+                }
+            }
+            taskRepository.save(task);
+        });
     }
 
     private String resolveRepository(JsonNode payload) {

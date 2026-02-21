@@ -22,12 +22,15 @@ spring:
 app:
   ingestion:
     queue-name: kpi:recalc:jobs
+    worker-delay-ms: 3000
   integrations:
     github:
       webhook-secret: ${GITHUB_WEBHOOK_SECRET:change-me}
     monday:
       webhook-token: ${MONDAY_WEBHOOK_TOKEN:change-me}
   task-key-regex: '([A-Z]{2,10}-[a-zA-Z0-9]+)'
+  snapshots:
+    cron: "0 5 0 * * *"
 
 management:
   endpoints:

@@ -1,6 +1,7 @@
 package com.snayvik.kpi.ingress.persistence;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,12 @@ public class MondayTaskPersistenceService {
             String status = resolveStatus(payload);
             if (!status.isBlank()) {
                 task.setStatus(status);
+                if ("done".equalsIgnoreCase(status.trim())) {
+                    task.setCompletedAt(Instant.now());
+                }
+            }
+            if (task.getStartedAt() == null) {
+                task.setStartedAt(Instant.now());
             }
 
             taskRepository.save(task);
