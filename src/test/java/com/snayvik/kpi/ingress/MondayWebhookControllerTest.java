@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.persistence.MondayTaskPersistenceService;
 import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.MondayDedupeKeyService;
 import com.snayvik.kpi.ingress.security.MondayWebhookAuthService;
@@ -37,12 +38,16 @@ class MondayWebhookControllerTest {
     @Mock
     private RecalculationJobPublisher recalculationJobPublisher;
 
+    @Mock
+    private MondayTaskPersistenceService mondayTaskPersistenceService;
+
     private MondayWebhookController mondayWebhookController;
 
     @BeforeEach
     void setUp() {
         mondayWebhookController = new MondayWebhookController(
                 webhookEventStoreService,
+                mondayTaskPersistenceService,
                 recalculationJobPublisher,
                 mondayWebhookAuthService,
                 mondayDedupeKeyService,
@@ -96,6 +101,7 @@ class MondayWebhookControllerTest {
                         org.mockito.ArgumentMatchers.eq("evt-123"),
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.any());
+        verify(mondayTaskPersistenceService).persistFromWebhook(org.mockito.ArgumentMatchers.any());
         verify(recalculationJobPublisher).publish(27L, WebhookEventSource.MONDAY);
     }
 
@@ -116,6 +122,7 @@ class MondayWebhookControllerTest {
 
         assertThat(response.getBody()).containsEntry("duplicate", true);
         assertThat(response.getBody()).containsEntry("queued", false);
+        verify(mondayTaskPersistenceService, never()).persistFromWebhook(org.mockito.ArgumentMatchers.any());
         verify(recalculationJobPublisher, never()).publish(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 }

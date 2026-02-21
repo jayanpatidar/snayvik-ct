@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.persistence.MondayTaskPersistenceService;
 import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.MondayDedupeKeyService;
 import com.snayvik.kpi.ingress.security.MondayWebhookAuthService;
@@ -27,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class MondayWebhookController {
 
     private final WebhookEventStoreService webhookEventStoreService;
+    private final MondayTaskPersistenceService mondayTaskPersistenceService;
     private final RecalculationJobPublisher recalculationJobPublisher;
     private final MondayWebhookAuthService mondayWebhookAuthService;
     private final MondayDedupeKeyService mondayDedupeKeyService;
@@ -34,11 +36,13 @@ public class MondayWebhookController {
 
     public MondayWebhookController(
             WebhookEventStoreService webhookEventStoreService,
+            MondayTaskPersistenceService mondayTaskPersistenceService,
             RecalculationJobPublisher recalculationJobPublisher,
             MondayWebhookAuthService mondayWebhookAuthService,
             MondayDedupeKeyService mondayDedupeKeyService,
             ObjectMapper objectMapper) {
         this.webhookEventStoreService = webhookEventStoreService;
+        this.mondayTaskPersistenceService = mondayTaskPersistenceService;
         this.recalculationJobPublisher = recalculationJobPublisher;
         this.mondayWebhookAuthService = mondayWebhookAuthService;
         this.mondayDedupeKeyService = mondayDedupeKeyService;
@@ -68,6 +72,7 @@ public class MondayWebhookController {
                 payload);
         boolean queued = false;
         if (!result.duplicate() && result.eventId() != null) {
+            mondayTaskPersistenceService.persistFromWebhook(payload);
             recalculationJobPublisher.publish(result.eventId(), WebhookEventSource.MONDAY);
             queued = true;
         }
