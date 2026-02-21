@@ -28,13 +28,6 @@ app:
       webhook-secret: ${GITHUB_WEBHOOK_SECRET:change-me}
     monday:
       webhook-token: ${MONDAY_WEBHOOK_TOKEN:change-me}
-  security:
-    user:
-      username: ${APP_USER_USERNAME:kpi-user}
-      password: ${APP_USER_PASSWORD:change-me-user}
-    admin:
-      username: ${APP_ADMIN_USERNAME:kpi-admin}
-      password: ${APP_ADMIN_PASSWORD:change-me-admin}
   task-key-regex: '([A-Z]{2,10}-[a-zA-Z0-9]+)'
   snapshots:
     cron: "0 5 0 * * *"

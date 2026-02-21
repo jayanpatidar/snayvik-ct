@@ -20,11 +20,4 @@ app:
       webhook-secret: test-github-secret
     monday:
       webhook-token: test-monday-token
-  security:
-    user:
-      username: test-user
-      password: test-user-password
-    admin:
-      username: test-admin
-      password: test-admin-password
   task-key-regex: '([A-Z]{2,10}-[a-zA-Z0-9]+)'

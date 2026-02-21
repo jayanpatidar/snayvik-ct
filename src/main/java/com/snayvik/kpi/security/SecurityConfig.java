@@ -1,24 +1,22 @@
 package com.snayvik.kpi.security;
 
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 @Configuration
-@EnableConfigurationProperties(SecurityUsersProperties.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfig {
 
     @Bean
@@ -52,23 +50,18 @@ public class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService userDetailsService(SecurityUsersProperties properties, PasswordEncoder passwordEncoder) {
-        UserDetails user = User.builder()
-                .username(properties.user().username())
-                .password(passwordEncoder.encode(properties.user().password()))
-                .roles("USER")
-                .build();
-        UserDetails admin = User.builder()
-                .username(properties.admin().username())
-                .password(passwordEncoder.encode(properties.admin().password()))
-                .roles("USER", "ADMIN")
-                .build();
-
-        return new InMemoryUserDetailsManager(user, admin);
+    UserDetailsService userDetailsService(AuthUserRepository authUserRepository) {
+        return username -> toUserDetails(authUserRepository, username);
     }
 
-    @Bean
-    PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    private UserDetails toUserDetails(AuthUserRepository authUserRepository, String username) {
+        AuthUser authUser = authUserRepository
+                .findByUsernameIgnoreCaseAndActiveTrue(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+        return User.builder()
+                .username(authUser.getUsername())
+                .password(authUser.getPasswordHash())
+                .roles(authUser.getRole())
+                .build();
     }
 }

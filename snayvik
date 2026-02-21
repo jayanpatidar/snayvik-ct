@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JAR_PATH="$ROOT_DIR/target/snayvik-ct-0.0.1-SNAPSHOT.jar"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ./snayvik admin create --username <username> --password <password> [spring args]
+
+Example:
+  ./snayvik admin create --username admin --password 'AdminPass@123'
+USAGE
+}
+
+if [[ $# -lt 2 ]]; then
+  usage
+  exit 1
+fi
+
+if [[ "$1" == "admin" && "$2" == "create" ]]; then
+  "$ROOT_DIR/mvnw" -q -DskipTests package
+  exec java -jar "$JAR_PATH" "$@"
+fi
+
+usage
+exit 1
