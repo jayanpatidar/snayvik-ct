@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.persistence.GitHubActivityPersistenceService;
 import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.GitHubWebhookAuthService;
 import java.io.IOException;
@@ -26,16 +27,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class GitHubWebhookController {
 
     private final WebhookEventStoreService webhookEventStoreService;
+    private final GitHubActivityPersistenceService gitHubActivityPersistenceService;
     private final RecalculationJobPublisher recalculationJobPublisher;
     private final GitHubWebhookAuthService gitHubWebhookAuthService;
     private final ObjectMapper objectMapper;
 
     public GitHubWebhookController(
             WebhookEventStoreService webhookEventStoreService,
+            GitHubActivityPersistenceService gitHubActivityPersistenceService,
             RecalculationJobPublisher recalculationJobPublisher,
             GitHubWebhookAuthService gitHubWebhookAuthService,
             ObjectMapper objectMapper) {
         this.webhookEventStoreService = webhookEventStoreService;
+        this.gitHubActivityPersistenceService = gitHubActivityPersistenceService;
         this.recalculationJobPublisher = recalculationJobPublisher;
         this.gitHubWebhookAuthService = gitHubWebhookAuthService;
         this.objectMapper = objectMapper;
@@ -61,6 +65,7 @@ public class GitHubWebhookController {
                 payload);
         boolean queued = false;
         if (!result.duplicate() && result.eventId() != null) {
+            gitHubActivityPersistenceService.persistFromWebhook(payload);
             recalculationJobPublisher.publish(result.eventId(), WebhookEventSource.GITHUB);
             queued = true;
         }

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snayvik.kpi.ingress.audit.WebhookEventSource;
 import com.snayvik.kpi.ingress.audit.WebhookEventStoreService;
 import com.snayvik.kpi.ingress.audit.WebhookStoreResult;
+import com.snayvik.kpi.ingress.persistence.GitHubActivityPersistenceService;
 import com.snayvik.kpi.ingress.queue.RecalculationJobPublisher;
 import com.snayvik.kpi.ingress.security.GitHubWebhookAuthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,13 +34,20 @@ class GitHubWebhookControllerTest {
     @Mock
     private RecalculationJobPublisher recalculationJobPublisher;
 
+    @Mock
+    private GitHubActivityPersistenceService gitHubActivityPersistenceService;
+
     private GitHubWebhookController gitHubWebhookController;
 
     @BeforeEach
     void setUp() {
         gitHubWebhookController =
                 new GitHubWebhookController(
-                        webhookEventStoreService, recalculationJobPublisher, gitHubWebhookAuthService, new ObjectMapper());
+                        webhookEventStoreService,
+                        gitHubActivityPersistenceService,
+                        recalculationJobPublisher,
+                        gitHubWebhookAuthService,
+                        new ObjectMapper());
     }
 
     @Test
@@ -69,6 +77,7 @@ class GitHubWebhookControllerTest {
                         org.mockito.ArgumentMatchers.eq("delivery-1"),
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.any());
+        verify(gitHubActivityPersistenceService).persistFromWebhook(org.mockito.ArgumentMatchers.any());
         verify(recalculationJobPublisher).publish(11L, WebhookEventSource.GITHUB);
     }
 
@@ -107,6 +116,7 @@ class GitHubWebhookControllerTest {
 
         assertThat(response.getBody()).containsEntry("duplicate", true);
         assertThat(response.getBody()).containsEntry("queued", false);
+        verify(gitHubActivityPersistenceService, never()).persistFromWebhook(org.mockito.ArgumentMatchers.any());
         verify(recalculationJobPublisher, never()).publish(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
     }
 }
