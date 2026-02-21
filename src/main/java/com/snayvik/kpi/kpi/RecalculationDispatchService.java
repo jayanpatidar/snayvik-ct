@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.snayvik.kpi.domain.TaskKeyExtractor;
 import com.snayvik.kpi.ingress.audit.WebhookEvent;
 import com.snayvik.kpi.ingress.audit.WebhookEventRepository;
+import com.snayvik.kpi.ingress.audit.WebhookEventStatus;
 import com.snayvik.kpi.ingress.persistence.BoardMappingRepository;
 import com.snayvik.kpi.policy.PolicyEvaluationService;
 import com.snayvik.kpi.time.TimeGovernanceService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,16 +50,29 @@ public class RecalculationDispatchService {
             return;
         }
 
-        Set<String> taskKeys = resolveTaskKeys(event);
-        for (String taskKey : taskKeys) {
-            kpiComputationService.recomputeTaskMetrics(taskKey);
-            policyEvaluationService.evaluateTask(taskKey);
-            timeGovernanceService.evaluateTask(taskKey);
+        try {
+            Set<String> taskKeys = resolveTaskKeys(event);
+            for (String taskKey : taskKeys) {
+                kpiComputationService.recomputeTaskMetrics(taskKey);
+                policyEvaluationService.evaluateTask(taskKey);
+                timeGovernanceService.evaluateTask(taskKey);
+            }
+            if (taskKeys.isEmpty()) {
+                kpiComputationService.recomputeAllTaskMetrics();
+            }
+            policyEvaluationService.evaluateEvent(eventId);
+
+            event.setStatus(WebhookEventStatus.PROCESSED.name());
+            event.setProcessedAt(Instant.now());
+            event.setErrorMessage(null);
+        } catch (RuntimeException exception) {
+            event.setStatus(WebhookEventStatus.FAILED.name());
+            event.setProcessedAt(Instant.now());
+            event.setErrorMessage(exception.getMessage());
+            webhookEventRepository.save(event);
+            throw exception;
         }
-        if (taskKeys.isEmpty()) {
-            kpiComputationService.recomputeAllTaskMetrics();
-        }
-        policyEvaluationService.evaluateEvent(eventId);
+        webhookEventRepository.save(event);
     }
 
     private Set<String> resolveTaskKeys(WebhookEvent event) {

@@ -35,6 +35,12 @@ app:
     cron: "0 */10 * * * *"
   time-governance:
     cron: "0 */15 * * * *"
+  retention:
+    cron: "0 20 1 * * *"
+    webhook-days: 90
+    threshold-marker-days: 120
+  health:
+    queue-backlog-critical: 1000
 
 management:
   endpoints:

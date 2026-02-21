@@ -10,4 +10,6 @@ public interface ThresholdNotificationMarkerRepository extends JpaRepository<Thr
             Long thresholdId,
             String userId,
             LocalDate windowStart);
+
+    long deleteByWindowStartBefore(LocalDate cutoffDate);
 }
