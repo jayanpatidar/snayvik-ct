@@ -12,3 +12,7 @@ management:
     health:
       probes:
         enabled: true
+
+app:
+  seed:
+    enabled: ${APP_SEED_ENABLED:true}

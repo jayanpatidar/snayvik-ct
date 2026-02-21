@@ -34,6 +34,18 @@ You can pass Spring datasource args if needed, for example:
 - API ping: `http://localhost:8080/api/kpi/system/ping`
 - Actuator health: `http://localhost:8080/actuator/health`
 
+## Demo Seeder (2 weeks)
+- The app includes an idempotent demo seeder that creates:
+  - board mappings
+  - seed tasks, PRs, commits, task metrics
+  - `daily_snapshots` for the last 14 days (2 weeks)
+  - seed users, skill groups, and time sessions
+- Enable for local run:
+```bash
+APP_SEED_ENABLED=true ./mvnw spring-boot:run
+```
+- Docker profile enables seed data by default (override with `APP_SEED_ENABLED=false`).
+
 ## Authentication
 - UI routes are protected and redirect unauthenticated users to `/login`.
 - `/api/**` requires authentication.
