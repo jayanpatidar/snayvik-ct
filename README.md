@@ -46,6 +46,23 @@ APP_SEED_ENABLED=true ./mvnw spring-boot:run
 ```
 - Docker profile enables seed data by default (override with `APP_SEED_ENABLED=false`).
 
+## Initial Full Sync (Phase 1)
+- Full sync and reconciliation scaffolding is available behind `app.sync.enabled`.
+- Default clients are no-op placeholders. They are intended to be replaced with real monday/GitHub API adapters.
+- Configure:
+```bash
+APP_SYNC_ENABLED=true
+APP_SYNC_GITHUB_REPOSITORIES=snayvik/repo-a,snayvik/repo-b
+APP_SYNC_GITHUB_LOOKBACK_DAYS=90
+APP_SYNC_INITIAL_RUN_ON_STARTUP=false
+```
+- Trigger manually (admin auth required):
+```bash
+curl -X POST -u admin:'AdminPass@123' http://localhost:8080/api/kpi/admin/sync/full
+curl -X POST -u admin:'AdminPass@123' http://localhost:8080/api/kpi/admin/sync/reconcile
+```
+- Nightly reconciliation cron: `app.sync.reconciliation-cron` (default `0 30 2 * * *`).
+
 ## Authentication
 - UI routes are protected and redirect unauthenticated users to `/login`.
 - `/api/**` requires authentication.

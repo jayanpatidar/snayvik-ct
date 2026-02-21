@@ -1,6 +1,7 @@
 package com.snayvik.kpi.ingress.persistence;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.snayvik.kpi.sync.MondayTaskSnapshot;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,10 +35,7 @@ public class MondayTaskPersistenceService {
 
             String status = resolveStatus(payload);
             if (!status.isBlank()) {
-                task.setStatus(status);
-                if ("done".equalsIgnoreCase(status.trim())) {
-                    task.setCompletedAt(Instant.now());
-                }
+                applyStatus(task, status, Instant.now());
             }
             if (task.getStartedAt() == null) {
                 task.setStartedAt(Instant.now());
@@ -45,6 +43,43 @@ public class MondayTaskPersistenceService {
 
             taskRepository.save(task);
         });
+    }
+
+    @Transactional
+    public String upsertFromSnapshot(BoardMapping boardMapping, MondayTaskSnapshot snapshot) {
+        if (boardMapping == null || snapshot == null) {
+            return null;
+        }
+        if (snapshot.pulseId() == null || snapshot.pulseId().isBlank()) {
+            return null;
+        }
+
+        String taskKey = boardMapping.getPrefix() + "-" + snapshot.pulseId();
+        Task task = taskRepository.findById(taskKey).orElseGet(Task::new);
+        task.setTaskKey(taskKey);
+        task.setPrefix(boardMapping.getPrefix());
+        task.setPulseId(snapshot.pulseId());
+        task.setBoardId(boardMapping.getBoardId());
+
+        if (snapshot.status() != null && !snapshot.status().isBlank()) {
+            applyStatus(task, snapshot.status(), null);
+        }
+        if (snapshot.startedAt() != null) {
+            task.setStartedAt(snapshot.startedAt());
+        }
+        if (snapshot.completedAt() != null) {
+            task.setCompletedAt(snapshot.completedAt());
+        }
+
+        taskRepository.save(task);
+        return taskKey;
+    }
+
+    private void applyStatus(Task task, String status, Instant completedFallback) {
+        task.setStatus(status);
+        if ("done".equalsIgnoreCase(status.trim()) && task.getCompletedAt() == null) {
+            task.setCompletedAt(completedFallback);
+        }
     }
 
     private String resolveBoardId(JsonNode payload) {

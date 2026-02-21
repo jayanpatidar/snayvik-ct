@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.snayvik.kpi.sync.MondayTaskSnapshot;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,5 +73,31 @@ class MondayTaskPersistenceServiceTest {
         mondayTaskPersistenceService.persistFromWebhook(objectMapper.readTree(payload));
 
         verify(taskRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void upsertsTaskFromSnapshot() {
+        BoardMapping mapping = org.mockito.Mockito.mock(BoardMapping.class);
+        when(mapping.getPrefix()).thenReturn("JWV");
+        when(mapping.getBoardId()).thenReturn("9988");
+        when(taskRepository.findById("JWV-abc123")).thenReturn(Optional.empty());
+
+        MondayTaskSnapshot snapshot = new MondayTaskSnapshot(
+                "abc123",
+                "Done",
+                Instant.parse("2026-02-20T08:00:00Z"),
+                Instant.parse("2026-02-20T12:00:00Z"),
+                Instant.parse("2026-02-20T11:00:00Z"));
+
+        String taskKey = mondayTaskPersistenceService.upsertFromSnapshot(mapping, snapshot);
+
+        assertThat(taskKey).isEqualTo("JWV-abc123");
+        ArgumentCaptor<Task> taskCaptor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(taskCaptor.capture());
+        Task task = taskCaptor.getValue();
+        assertThat(task.getTaskKey()).isEqualTo("JWV-abc123");
+        assertThat(task.getStatus()).isEqualTo("Done");
+        assertThat(task.getStartedAt()).isEqualTo(Instant.parse("2026-02-20T08:00:00Z"));
+        assertThat(task.getCompletedAt()).isEqualTo(Instant.parse("2026-02-20T12:00:00Z"));
     }
 }

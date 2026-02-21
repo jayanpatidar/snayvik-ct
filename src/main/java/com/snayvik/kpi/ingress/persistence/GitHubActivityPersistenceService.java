@@ -2,6 +2,8 @@ package com.snayvik.kpi.ingress.persistence;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.snayvik.kpi.domain.TaskKeyExtractor;
+import com.snayvik.kpi.sync.GitHubCommitSnapshot;
+import com.snayvik.kpi.sync.GitHubPullRequestSnapshot;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -44,6 +46,49 @@ public class GitHubActivityPersistenceService {
 
         persistPullRequest(payload, repository, linkableTaskKey);
         persistCommits(payload, repository, linkableTaskKey);
+    }
+
+    @Transactional
+    public String persistFromSnapshot(GitHubPullRequestSnapshot snapshot) {
+        if (snapshot == null || snapshot.repository() == null || snapshot.repository().isBlank()) {
+            return null;
+        }
+        if (snapshot.prNumber() <= 0) {
+            return null;
+        }
+
+        Set<String> taskKeys = taskKeyExtractor.extractTaskKeys(snapshotCandidates(snapshot));
+        String linkableTaskKey = resolveLinkableTaskKey(taskKeys);
+
+        PullRequestActivity pullRequestActivity = pullRequestActivityRepository
+                .findByRepositoryAndPrNumber(snapshot.repository(), snapshot.prNumber())
+                .orElseGet(PullRequestActivity::new);
+        pullRequestActivity.setRepository(snapshot.repository());
+        pullRequestActivity.setPrNumber(snapshot.prNumber());
+        pullRequestActivity.setTaskKey(linkableTaskKey);
+        pullRequestActivity.setOpenedAt(snapshot.openedAt());
+        pullRequestActivity.setMergedAt(snapshot.mergedAt());
+        pullRequestActivity.setReopenCount(Math.max(snapshot.reopenCount(), 0));
+        pullRequestActivityRepository.save(pullRequestActivity);
+        updateTaskFromPullRequest(linkableTaskKey, pullRequestActivity);
+
+        for (GitHubCommitSnapshot commitSnapshot : snapshot.commits()) {
+            if (commitSnapshot == null || commitSnapshot.commitHash() == null || commitSnapshot.commitHash().isBlank()) {
+                continue;
+            }
+            CommitActivity commitActivity = commitActivityRepository
+                    .findByRepositoryAndCommitHash(snapshot.repository(), commitSnapshot.commitHash())
+                    .orElseGet(CommitActivity::new);
+            commitActivity.setRepository(snapshot.repository());
+            commitActivity.setCommitHash(commitSnapshot.commitHash());
+            commitActivity.setTaskKey(linkableTaskKey);
+            commitActivity.setAuthor(commitSnapshot.author());
+            commitActivity.setCommittedAt(commitSnapshot.committedAt());
+            commitActivityRepository.save(commitActivity);
+            updateTaskFromCommit(linkableTaskKey, commitActivity);
+        }
+
+        return linkableTaskKey;
     }
 
     private String resolveLinkableTaskKey(Set<String> taskKeys) {
@@ -197,6 +242,19 @@ public class GitHubActivityPersistenceService {
             for (JsonNode commitNode : commitsNode) {
                 addCandidate(candidates, commitNode.path("message").asText(null));
             }
+        }
+        return candidates;
+    }
+
+    private List<String> snapshotCandidates(GitHubPullRequestSnapshot snapshot) {
+        List<String> candidates = new ArrayList<>();
+        addCandidate(candidates, snapshot.title());
+        addCandidate(candidates, snapshot.branchName());
+        for (GitHubCommitSnapshot commitSnapshot : snapshot.commits()) {
+            if (commitSnapshot == null) {
+                continue;
+            }
+            addCandidate(candidates, commitSnapshot.message());
         }
         return candidates;
     }

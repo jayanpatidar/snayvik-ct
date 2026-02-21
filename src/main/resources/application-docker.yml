@@ -16,3 +16,5 @@ management:
 app:
   seed:
     enabled: ${APP_SEED_ENABLED:true}
+  sync:
+    enabled: ${APP_SYNC_ENABLED:false}

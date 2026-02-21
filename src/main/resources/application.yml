@@ -39,6 +39,12 @@ app:
     cron: "0 20 1 * * *"
     webhook-days: 90
     threshold-marker-days: 120
+  sync:
+    enabled: ${APP_SYNC_ENABLED:false}
+    initial-run-on-startup: ${APP_SYNC_INITIAL_RUN_ON_STARTUP:false}
+    reconciliation-cron: ${APP_SYNC_RECONCILIATION_CRON:0 30 2 * * *}
+    github-lookback-days: ${APP_SYNC_GITHUB_LOOKBACK_DAYS:90}
+    github-repositories: ${APP_SYNC_GITHUB_REPOSITORIES:}
   health:
     queue-backlog-critical: 1000
   seed:
